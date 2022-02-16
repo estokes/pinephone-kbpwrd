@@ -116,6 +116,7 @@ impl Device {
 enum State {
     Charging,
     Discharging,
+    Full,
 }
 
 impl FromStr for State {
@@ -125,6 +126,7 @@ impl FromStr for State {
         match s {
             "Charging" => Ok(State::Charging),
             "Discharging" => Ok(State::Discharging),
+            "Full" => Ok(State::Full),
             s => bail!("unexpected state {}", s),
         }
     }
@@ -220,18 +222,21 @@ async fn step(
                 }
             }
         },
-        State::Discharging => match info.mb.state {
-            State::Charging => Action::MaybeStepDown,
-            State::Discharging => {
-                let mb = info.mb.current.abs();
-                let kb = info.kbd.current.abs();
-                if mb >= (kb >> 1) {
-                    Action::MaybeStepUp
-                } else {
-                    Action::Pass
+        State::Full | State::Discharging => {
+            *kb_charge_begin = None;
+            match info.mb.state {
+                State::Charging => Action::MaybeStepDown,
+                State::Full | State::Discharging => {
+                    let mb = info.mb.current.abs();
+                    let kb = info.kbd.current.abs();
+                    if mb >= (kb >> 1) {
+                        Action::MaybeStepUp
+                    } else {
+                        Action::Pass
+                    }
                 }
             }
-        },
+        }
     };
     match action {
         Action::Pass => (),
