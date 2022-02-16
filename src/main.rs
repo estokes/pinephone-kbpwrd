@@ -65,7 +65,6 @@ struct Device {
     kb_state: PathBuf,
     kb_voltage: PathBuf,
     kb_current: PathBuf,
-    kb_enabled: PathBuf,
     kb_limit: PathBuf,
     mb_state: PathBuf,
     mb_voltage: PathBuf,
@@ -78,7 +77,6 @@ impl Device {
         let base = PathBuf::from("/sys/class/power_supply");
         Device {
             model,
-            kb_enabled: base.join("ip5xxx-boost/online"),
             kb_current: base.join("ip5xxx-charger/current_now"),
             kb_voltage: base.join("ip5xxx-charger/voltage_now"),
             kb_state: base.join("ip5xxx-charger/status"),
@@ -91,7 +89,7 @@ impl Device {
     }
 
     async fn set_limit(&self, limit: u32) -> Result<()> {
-        info!("setting input_current_limit: {}", limit);
+        info!("setting input_current_limit: {}", limit / 1000);
         Ok(fs::write(&self.mb_limit, &format!("{}\n", limit)).await?)
     }
 
@@ -135,7 +133,6 @@ struct KeyboardBattery {
     voltage: i32,
     current: i32,
     limit: i32,
-    enabled: bool,
 }
 
 impl KeyboardBattery {
@@ -145,7 +142,6 @@ impl KeyboardBattery {
             voltage: read::<i32>(&dev.kb_voltage).await??,
             current: read::<i32>(&dev.kb_current).await??,
             limit: read::<i32>(&dev.kb_limit).await??,
-            enabled: read::<u8>(&dev.kb_enabled).await?? == 1,
         })
     }
 }
@@ -193,16 +189,15 @@ async fn step(
     const STEP: Duration = Duration::from_secs(10);
     let info = dev.info().await?;
     info!(
-        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}, e: {}",
-        info.mb.voltage,
-        info.mb.current,
+        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}",
+        info.mb.voltage / 1000,
+        info.mb.current / 1000,
         info.mb.state,
-        info.mb.limit,
-        info.kbd.voltage,
-        info.kbd.current,
+        info.mb.limit / 1000,
+        info.kbd.voltage / 1000,
+        info.kbd.current / 1000,
         info.kbd.state,
-        info.kbd.limit,
-        info.kbd.enabled
+        info.kbd.limit / 1000,
     );
     let action = match info.kbd.state {
         State::Charging => match kb_charge_begin {
