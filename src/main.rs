@@ -2,7 +2,6 @@ use anyhow::{bail, Error, Result};
 use log::{error, info};
 use std::{
     cmp::{max, min},
-    convert::Into,
     path::PathBuf,
     str::FromStr,
     time::{Duration, Instant},
@@ -260,13 +259,14 @@ async fn step(
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
     let dev = Device::new(Model::PinePhonePro);
     let mut kb_charge_begin: Option<Instant> = None;
     let mut last_step = Instant::now();
     loop {
         time::sleep(Duration::from_secs(1)).await;
         if let Err(e) = step(&dev, &mut kb_charge_begin, &mut last_step).await {
-            error!("{}", e);
+            error!("error: {} will retry", e);
         }
     }
 }
