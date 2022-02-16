@@ -235,7 +235,7 @@ async fn step(
             }
         },
     };
-    match dbg!(action) {
+    match action {
         Action::Pass => (),
         Action::MaybeStepUp | Action::StepUp => {
             if action == Action::StepUp || last_step.elapsed() > STEP {
