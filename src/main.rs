@@ -94,7 +94,10 @@ impl Device {
     }
 
     async fn limit_step(&self, up: bool, cur: u32) -> Result<()> {
-        Ok(self.set_limit(self.model.limit_step(up, cur)).await?)
+        let limit = self.model.limit_step(up, cur);
+        Ok(if limit != cur {
+            self.set_limit(limit).await?
+        })
     }
 
     async fn limit_default(&self) -> Result<()> {
@@ -252,7 +255,7 @@ async fn step(
     Ok(())
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     env_logger::init();
     let dev = Device::new(Model::PinePhonePro);
