@@ -42,6 +42,14 @@ impl Model {
         }
     }
 
+    // return the default input current limit
+    fn max_limit(&self) -> u32 {
+        match self {
+            Model::PinePhonePro => self.valid_limits()[9],
+            Model::PinePhone => unimplemented!(),
+        }
+    }
+
     // given the current input_curent_limit, step one increment up or down and return the new value
     fn limit_step(&self, up: bool, cur: u32) -> u32 {
         let valid = self.valid_limits();
@@ -93,15 +101,25 @@ impl Device {
         Ok(fs::write(&self.mb_limit, &format!("{}\n", limit)).await?)
     }
 
-    async fn limit_step(&self, up: bool, cur: u32) -> Result<()> {
+    async fn set_limit_step(&self, up: bool, cur: u32) -> Result<()> {
         let limit = self.model.limit_step(up, cur);
         Ok(if limit != cur {
             self.set_limit(limit).await?
         })
     }
 
-    async fn limit_default(&self) -> Result<()> {
-        Ok(self.set_limit(self.model.default_limit()).await?)
+    async fn set_limit_default(&self, cur: u32) -> Result<()> {
+        let def = self.model.default_limit();
+        Ok(if cur != def {
+            self.set_limit(def).await?
+        })
+    }
+
+    async fn set_limit_max(&self, cur: u32) -> Result<()> {
+        let def = self.model.max_limit();
+        Ok(if cur != def {
+            self.set_limit(def).await?
+        })
     }
 
     async fn info(&self) -> Result<Info> {
@@ -183,6 +201,7 @@ enum Action {
     StepUp,
     StepDown,
     SetDefault,
+    SetMax,
     Pass,
 }
 
@@ -216,7 +235,7 @@ async fn step(
                 if tot < info.kbd.limit - (info.kbd.limit >> 1) {
                     Action::MaybeStepUp
                 } else if tot >= info.kbd.limit {
-                    Action::StepDown
+                    Action::SetDefault
                 } else {
                     Action::Pass
                 }
@@ -226,7 +245,8 @@ async fn step(
             *kb_charge_begin = None;
             match info.mb.state {
                 State::Charging => Action::MaybeStepDown,
-                State::Full | State::Discharging => {
+                State::Full => Action::SetMax,
+                State::Discharging => {
                     let mb = info.mb.current.abs();
                     let kb = info.kbd.current.abs();
                     if mb >= (kb >> 1) {
@@ -243,18 +263,22 @@ async fn step(
         Action::MaybeStepUp | Action::StepUp => {
             if action == Action::StepUp || last_step.elapsed() > STEP {
                 *last_step = Instant::now();
-                dev.limit_step(true, info.mb.limit).await?;
+                dev.set_limit_step(true, info.mb.limit).await?;
             }
         }
         Action::MaybeStepDown | Action::StepDown => {
             if action == Action::StepDown || last_step.elapsed() > STEP {
                 *last_step = Instant::now();
-                dev.limit_step(false, info.mb.limit).await?;
+                dev.set_limit_step(false, info.mb.limit).await?;
             }
         }
         Action::SetDefault => {
             *last_step = Instant::now();
-            dev.limit_default().await?
+            dev.set_limit_default(info.mb.limit).await?
+        }
+        Action::SetMax => {
+            *last_step = Instant::now();
+            dev.set_limit_max(info.mb.limit).await?
         }
     }
     Ok(())
