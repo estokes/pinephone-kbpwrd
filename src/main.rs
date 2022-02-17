@@ -205,33 +205,16 @@ enum Action {
     Pass,
 }
 
-async fn step(
-    dev: &Device,
-    kb_charge_begin: &mut Option<Instant>,
-    last_step: &mut Instant,
-) -> Result<()> {
+async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> Result<()> {
     const STEP: Duration = Duration::from_secs(10);
     let info = dev.info().await?;
-    info!(
-        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}",
-        info.mb.voltage / 1000,
-        info.mb.current / 1000,
-        info.mb.state,
-        info.mb.limit / 1000,
-        info.kbd.voltage / 1000,
-        info.kbd.current / 1000,
-        info.kbd.state,
-        info.kbd.limit / 1000,
-    );
     let action = match info.kbd.state {
-        State::Charging => match kb_charge_begin {
-            None => {
-                *kb_charge_begin = Some(Instant::now());
+        State::Charging => {
+            if !*kb_charging {
+                *kb_charging = true;
                 Action::SetDefault
-            }
-//            Some(ts) if ts.elapsed() < Duration::from_secs(600) => Action::Pass,
-            Some(_) => {
-                let tot = dbg!(info.kbd.current + max(0, info.mb.current));
+            } else {
+                let tot = dbg!(dbg!(info.kbd.current) + dbg!(max(0, info.mb.current)));
                 if tot < info.kbd.limit - (info.kbd.limit >> 1) {
                     Action::MaybeStepUp
                 } else if tot >= info.kbd.limit {
@@ -240,10 +223,13 @@ async fn step(
                     Action::Pass
                 }
             }
-        },
-        State::Full => Action::SetMax,
+        }
+        State::Full => {
+            *kb_charging = false;
+            Action::SetMax
+        }
         State::Discharging => {
-            *kb_charge_begin = None;
+            *kb_charging = false;
             match info.mb.state {
                 State::Full => Action::SetDefault,
                 State::Charging => Action::MaybeStepDown,
@@ -259,6 +245,18 @@ async fn step(
             }
         }
     };
+    info!(
+        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}, {:?}",
+        info.mb.voltage / 1000,
+        info.mb.current / 1000,
+        info.mb.state,
+        info.mb.limit / 1000,
+        info.kbd.voltage / 1000,
+        info.kbd.current / 1000,
+        info.kbd.state,
+        info.kbd.limit / 1000,
+        action
+    );
     match action {
         Action::Pass => (),
         Action::MaybeStepUp | Action::StepUp => {
@@ -289,11 +287,11 @@ async fn step(
 async fn main() -> Result<()> {
     env_logger::init();
     let dev = Device::new(Model::PinePhonePro);
-    let mut kb_charge_begin: Option<Instant> = None;
+    let mut kb_charging = false;
     let mut last_step = Instant::now();
     loop {
         time::sleep(Duration::from_secs(1)).await;
-        if let Err(e) = step(&dev, &mut kb_charge_begin, &mut last_step).await {
+        if let Err(e) = step(&dev, &mut kb_charging, &mut last_step).await {
             error!("error: {} will retry", e);
         }
     }
