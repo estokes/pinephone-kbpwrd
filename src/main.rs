@@ -246,7 +246,7 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
         }
     };
     info!(
-        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}, {:?}",
+        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}, act: {:?}",
         info.mb.voltage / 1000,
         info.mb.current / 1000,
         info.mb.state,
