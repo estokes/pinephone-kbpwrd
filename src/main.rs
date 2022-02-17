@@ -144,7 +144,7 @@ impl FromStr for State {
         match s {
             "Charging" => Ok(State::Charging),
             "Discharging" => Ok(State::Discharging),
-            "Full" => Ok(State::Full),
+            "Full" | "Not Charging" => Ok(State::Full),
             s => bail!("unexpected state {}", s),
         }
     }
@@ -229,9 +229,9 @@ async fn step(
                 *kb_charge_begin = Some(Instant::now());
                 Action::SetDefault
             }
-            Some(ts) if ts.elapsed() < Duration::from_secs(600) => Action::Pass,
+//            Some(ts) if ts.elapsed() < Duration::from_secs(600) => Action::Pass,
             Some(_) => {
-                let tot = info.kbd.current + max(0, info.mb.current);
+                let tot = dbg!(info.kbd.current + max(0, info.mb.current));
                 if tot < info.kbd.limit - (info.kbd.limit >> 1) {
                     Action::MaybeStepUp
                 } else if tot >= info.kbd.limit {
@@ -241,11 +241,12 @@ async fn step(
                 }
             }
         },
-        State::Full | State::Discharging => {
+        State::Full => Action::SetMax,
+        State::Discharging => {
             *kb_charge_begin = None;
             match info.mb.state {
+                State::Full => Action::SetDefault,
                 State::Charging => Action::MaybeStepDown,
-                State::Full => Action::SetMax,
                 State::Discharging => {
                     let mb = info.mb.current.abs();
                     let kb = info.kbd.current.abs();
