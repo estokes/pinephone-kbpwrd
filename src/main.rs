@@ -74,6 +74,7 @@ struct Device {
     kb_voltage: PathBuf,
     kb_current: PathBuf,
     kb_limit: PathBuf,
+    kb_enabled: PathBuf,
     mb_state: PathBuf,
     mb_voltage: PathBuf,
     mb_current: PathBuf,
@@ -89,6 +90,7 @@ impl Device {
             kb_voltage: base.join("ip5xxx-charger/voltage_now"),
             kb_state: base.join("ip5xxx-charger/status"),
             kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
+            kb_enabled: base.join("ip5xxx-boost/online"),
             mb_state: base.join("battery/status"),
             mb_voltage: base.join("battery/voltage_now"),
             mb_current: base.join("battery/current_now"),
@@ -144,7 +146,7 @@ impl FromStr for State {
         match s {
             "Charging" => Ok(State::Charging),
             "Discharging" => Ok(State::Discharging),
-            "Full" | "Not Charging" => Ok(State::Full),
+            "Full" | "Not charging" => Ok(State::Full),
             s => bail!("unexpected state {}", s),
         }
     }
@@ -156,6 +158,7 @@ struct KeyboardBattery {
     voltage: i32,
     current: i32,
     limit: i32,
+    enabled: bool,
 }
 
 impl KeyboardBattery {
@@ -165,6 +168,7 @@ impl KeyboardBattery {
             voltage: read::<i32>(&dev.kb_voltage).await??,
             current: read::<i32>(&dev.kb_current).await??,
             limit: read::<i32>(&dev.kb_limit).await??,
+            enabled: read::<i32>(&dev.kb_enabled).await?? == 1,
         })
     }
 }
@@ -214,8 +218,8 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                 *kb_charging = true;
                 Action::SetDefault
             } else {
-                let tot = dbg!(dbg!(info.kbd.current) + dbg!(max(0, info.mb.current)));
-                if tot < info.kbd.limit - (info.kbd.limit >> 1) {
+                let tot = info.kbd.current + max(0, info.mb.current);
+                if tot < info.kbd.limit - (info.kbd.limit / 5) {
                     Action::MaybeStepUp
                 } else if tot >= info.kbd.limit {
                     Action::SetDefault
@@ -225,21 +229,28 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             }
         }
         State::Full => {
-            *kb_charging = false;
-            Action::SetMax
+            if info.kbd.enabled {
+                Action::SetMax
+            } else {
+                Action::SetDefault
+            }
         }
         State::Discharging => {
-            *kb_charging = false;
-            match info.mb.state {
-                State::Full => Action::SetDefault,
-                State::Charging => Action::MaybeStepDown,
-                State::Discharging => {
-                    let mb = info.mb.current.abs();
-                    let kb = info.kbd.current.abs();
-                    if mb >= (kb >> 1) {
-                        Action::MaybeStepUp
-                    } else {
-                        Action::Pass
+            if *kb_charging {
+                *kb_charging = false;
+                Action::SetDefault
+            } else {
+                match info.mb.state {
+                    State::Full => Action::SetDefault,
+                    State::Charging => Action::MaybeStepDown,
+                    State::Discharging => {
+                        let mb = info.mb.current.abs();
+                        let kb = info.kbd.current.abs();
+                        if mb >= (kb >> 1) {
+                            Action::MaybeStepUp
+                        } else {
+                            Action::Pass
+                        }
                     }
                 }
             }
