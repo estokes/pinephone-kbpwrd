@@ -7,7 +7,7 @@ description = "A daemon for managing the pinephone keyboard case battery"
 homepage = "https://github.com/estokes/pinephone-kbpwrd"
 repository = "https://github.com/estokes/pinephone-kbpwrd"
 readme = "README.md"
-keywords = ["phinephone", "pinephone pro", "keyboard case"]
+keywords = ["phinephone", "keyboard", "case"]
 categories = ["hardware-support"]
 
 [profile.release]
