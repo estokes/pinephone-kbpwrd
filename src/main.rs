@@ -157,7 +157,7 @@ struct KeyboardBattery {
     state: State,
     voltage: i32,
     current: i32,
-    limit: i32,
+    limit: u32,
     enabled: bool,
 }
 
@@ -167,7 +167,7 @@ impl KeyboardBattery {
             state: read::<State>(&dev.kb_state).await??,
             voltage: read::<i32>(&dev.kb_voltage).await??,
             current: read::<i32>(&dev.kb_current).await??,
-            limit: read::<i32>(&dev.kb_limit).await??,
+            limit: read::<u32>(&dev.kb_limit).await??,
             enabled: read::<i32>(&dev.kb_enabled).await?? == 1,
         })
     }
@@ -219,9 +219,9 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                 Action::SetDefault
             } else {
                 let tot = info.kbd.current + max(0, info.mb.current);
-                if tot < info.kbd.limit - (info.kbd.limit / 5) {
+                if tot < (info.kbd.limit - (info.kbd.limit / 5)) as i32 {
                     Action::MaybeStepUp
-                } else if tot >= info.kbd.limit {
+                } else if tot >= info.kbd.limit as i32 {
                     Action::SetDefault
                 } else {
                     Action::Pass
@@ -271,7 +271,9 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
     match action {
         Action::Pass => (),
         Action::MaybeStepUp | Action::StepUp => {
-            if action == Action::StepUp || last_step.elapsed() > STEP {
+            if (action == Action::StepUp || last_step.elapsed() > STEP)
+                && info.mb.limit < info.kbd.limit
+            {
                 *last_step = Instant::now();
                 dev.set_limit_step(true, info.mb.limit).await?;
             }
