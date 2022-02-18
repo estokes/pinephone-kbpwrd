@@ -45,7 +45,7 @@ doesn't daemonize, and I didn't write systemd startup units or init
 scripts yet. I run it as root in a terminal with logging turned on.
 
 ```
-[root@sasam-chan ~]$ RUST_LOG=info {path-to-binary}/kbpwrd
+[root@sasami-chan ~]$ RUST_LOG=info {path-to-binary}/kbpwrd
 ```
 
 it will then print log messages every second
