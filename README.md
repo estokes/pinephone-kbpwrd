@@ -32,10 +32,10 @@ If you have rust installed you can build it with
 $ cargo install kbpwrd
 ```
 
-I may post binaries for poplar distros, Hopefully it will get
+I may post binaries for poplar distros. Hopefully it will get
 packaged. Because this software runs as root, you should read it, or
 have someone you trust read it before running it. I know there have
-been malware incidents in the pine community reently. This isn't
+been malware incidents in the pine community recently. This isn't
 malware, but don't take my word for it!
 
 ## Use
