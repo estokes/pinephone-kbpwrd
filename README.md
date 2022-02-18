@@ -22,7 +22,7 @@ hardware.
 At the moment it is only working on the pinephone pro, mainly because
 that is it's development platform, but also because the PPP has more
 need of it due to it's higher power consumption. I do plan to make it
-work on the pinephone at some point as well as the pro.
+work on the pinephone at some point.
 
 ## Installation
 
