@@ -61,8 +61,9 @@ the keyboard, and the action describes what the daemon plans to do
 this cycle (e.g. raise, lower, set to default the input current limit
 on the phone).
 
-When running the daemon you shoul observe your main battery
+When running the daemon you should observe your main battery
 discharging, but much more slowly than it normally would. Due to
 better power management and the discrete steps that input current
 limit can accept the keyboard battery will take a larger portion of
-the load than it should, and as such it will likely discharge first.
+the load than it should during normal loads, and as such it will
+likely discharge first.
