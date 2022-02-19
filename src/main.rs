@@ -183,10 +183,16 @@ struct MainBattery {
 
 impl MainBattery {
     async fn get(dev: &Device) -> Result<MainBattery> {
+        let current = read::<i32>(&dev.mb_current).await??;
+        let state = match read::<State>(&dev.mb_state).await?? {
+            State::Full => State::Full,
+            State::Charging if current > 0 => State::Charging,
+            State::Charging => State::Discharging,
+            State::Discharging => State::Discharging
+        };
         Ok(MainBattery {
-            state: read::<State>(&dev.mb_state).await??,
+            state, current,
             voltage: read::<i32>(&dev.mb_voltage).await??,
-            current: read::<i32>(&dev.mb_current).await??,
             limit: read::<u32>(&dev.mb_limit).await??,
         })
     }
