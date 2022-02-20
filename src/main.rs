@@ -50,7 +50,7 @@ impl Model {
     fn default_limit(&self) -> u32 {
         match self {
             Model::PinePhonePro => self.valid_limits()[1],
-            Model::PinePhone => unimplemented!(),
+            Model::PinePhone => self.valid_limits()[1]
         }
     }
 
@@ -58,7 +58,7 @@ impl Model {
     fn max_limit(&self) -> u32 {
         match self {
             Model::PinePhonePro => self.valid_limits()[9],
-            Model::PinePhone => unimplemented!(),
+            Model::PinePhone => self.valid_limits()[6],
         }
     }
 
