@@ -22,15 +22,27 @@ enum Model {
 }
 
 impl Model {
+    fn detect() -> Result<Self> {
+        if PathBuf::from("/sys/class/power_supply/rk818-usb").exists() {
+            Ok(Model::PinePhonePro)
+        } else if PathBuf::from("/sys/class/power_supply/axp20x-usb").exists() {
+            Ok(Model::PinePhone)
+        } else {
+            bail!("unknown model")
+        }
+    }
+
     // valid values that can be written to input_current_limit
     fn valid_limits(&self) -> &'static [u32] {
         static PPP: [u32; 10] = [
             80000, 450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
         ];
-        //    static PP: ?
+        static PP: [u32; 7] = [
+            100000, 500000, 900000, 1500000, 2000000, 2500000, 3000000
+        ];
         match self {
             Model::PinePhonePro => &PPP,
-            Model::PinePhone => unimplemented!(),
+            Model::PinePhone => &PP,
         }
     }
 
@@ -84,17 +96,31 @@ struct Device {
 impl Device {
     fn new(model: Model) -> Device {
         let base = PathBuf::from("/sys/class/power_supply");
-        Device {
-            model,
-            kb_current: base.join("ip5xxx-charger/current_now"),
-            kb_voltage: base.join("ip5xxx-charger/voltage_now"),
-            kb_state: base.join("ip5xxx-charger/status"),
-            kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
-            kb_enabled: base.join("ip5xxx-boost/online"),
-            mb_state: base.join("battery/status"),
-            mb_voltage: base.join("battery/voltage_now"),
-            mb_current: base.join("battery/current_now"),
-            mb_limit: base.join("rk818-usb/input_current_limit"),
+        match model {
+            Model::PinePhonePro => Device {
+                model,
+                kb_current: base.join("ip5xxx-charger/current_now"),
+                kb_voltage: base.join("ip5xxx-charger/voltage_now"),
+                kb_state: base.join("ip5xxx-charger/status"),
+                kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
+                kb_enabled: base.join("ip5xxx-boost/online"),
+                mb_state: base.join("battery/status"),
+                mb_voltage: base.join("battery/voltage_now"),
+                mb_current: base.join("battery/current_now"),
+                mb_limit: base.join("rk818-usb/input_current_limit"),
+            },
+            Model::PinePhone => Device {
+                model,
+                kb_current: base.join("ip5xxx-charger/current_now"),
+                kb_voltage: base.join("ip5xxx-charger/voltage_now"),
+                kb_state: base.join("ip5xxx-charger/status"),
+                kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
+                kb_enabled: base.join("ip5xxx-boost/online"),
+                mb_state: base.join("axp20x-battery/status"),
+                mb_voltage: base.join("axp20x-battery/voltage_now"),
+                mb_current: base.join("axp20x-battery/current_now"),
+                mb_limit: base.join("axp20x-usb/input_current_limit"),
+            },
         }
     }
 
@@ -155,7 +181,7 @@ impl FromStr for State {
 #[derive(Debug)]
 struct KeyboardBattery {
     state: State,
-    voltage: i32,
+    voltage: u32,
     current: i32,
     limit: u32,
     enabled: bool,
@@ -164,10 +190,10 @@ struct KeyboardBattery {
 impl KeyboardBattery {
     async fn get(dev: &Device) -> Result<KeyboardBattery> {
         Ok(KeyboardBattery {
-            state: read::<State>(&dev.kb_state).await??,
-            voltage: read::<i32>(&dev.kb_voltage).await??,
-            current: read::<i32>(&dev.kb_current).await??,
-            limit: read::<u32>(&dev.kb_limit).await??,
+            state: read(&dev.kb_state).await??,
+            voltage: read(&dev.kb_voltage).await??,
+            current: read(&dev.kb_current).await??,
+            limit: read(&dev.kb_limit).await??,
             enabled: read::<i32>(&dev.kb_enabled).await?? == 1,
         })
     }
@@ -176,25 +202,44 @@ impl KeyboardBattery {
 #[derive(Debug)]
 struct MainBattery {
     state: State,
-    voltage: i32,
+    voltage: u32,
     current: i32,
     limit: u32,
 }
 
 impl MainBattery {
     async fn get(dev: &Device) -> Result<MainBattery> {
-        let current = read::<i32>(&dev.mb_current).await??;
-        let state = match read::<State>(&dev.mb_state).await?? {
-            State::Full => State::Full,
-            State::Charging if current > 0 => State::Charging,
-            State::Charging => State::Discharging,
-            State::Discharging => State::Discharging
-        };
-        Ok(MainBattery {
-            state, current,
-            voltage: read::<i32>(&dev.mb_voltage).await??,
-            limit: read::<u32>(&dev.mb_limit).await??,
-        })
+        match dev.model {
+            Model::PinePhonePro => {
+                let current: i32 = read(&dev.mb_current).await??;
+                let state: State = match read(&dev.mb_state).await?? {
+                    State::Full => State::Full,
+                    State::Charging if current > 0 => State::Charging,
+                    State::Charging => State::Discharging,
+                    State::Discharging => State::Discharging,
+                };
+                Ok(MainBattery {
+                    state,
+                    current,
+                    voltage: read(&dev.mb_voltage).await??,
+                    limit: read(&dev.mb_limit).await??,
+                })
+            }
+            Model::PinePhone => {
+                let current_abs: i32 = read(&dev.mb_current).await??;
+                let state: State = read(&dev.mb_state).await??;
+                let current = match state {
+                    State::Charging | State::Full => current_abs,
+                    State::Discharging => !current_abs,
+                };
+                Ok(MainBattery {
+                    state,
+                    current,
+                    voltage: read(&dev.mb_voltage).await??,
+                    limit: read(&dev.mb_limit).await??,
+                })
+            }
+        }
     }
 }
 
@@ -305,7 +350,7 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     env_logger::init();
-    let dev = Device::new(Model::PinePhonePro);
+    let dev = Device::new(Model::detect()?);
     let mut kb_charging = false;
     let mut last_step = Instant::now();
     loop {
