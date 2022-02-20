@@ -37,9 +37,7 @@ impl Model {
         static PPP: [u32; 10] = [
             80000, 450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
         ];
-        static PP: [u32; 7] = [
-            100000, 500000, 900000, 1500000, 2000000, 2500000, 3000000
-        ];
+        static PP: [u32; 7] = [100000, 500000, 900000, 1500000, 2000000, 2500000, 3000000];
         match self {
             Model::PinePhonePro => &PPP,
             Model::PinePhone => &PP,
@@ -50,7 +48,7 @@ impl Model {
     fn default_limit(&self) -> u32 {
         match self {
             Model::PinePhonePro => self.valid_limits()[1],
-            Model::PinePhone => self.valid_limits()[1]
+            Model::PinePhone => self.valid_limits()[1],
         }
     }
 
@@ -209,34 +207,40 @@ struct MainBattery {
 
 impl MainBattery {
     async fn get(dev: &Device) -> Result<MainBattery> {
+        async fn get_state(dev: &Device, current: i32) -> Result<State> {
+            Ok(match read(&dev.mb_state).await?? {
+                State::Full => State::Full,
+                State::Charging if current > 0 => State::Charging,
+                State::Charging => State::Discharging,
+                State::Discharging => State::Discharging,
+            })
+        }
         match dev.model {
             Model::PinePhonePro => {
                 let current: i32 = read(&dev.mb_current).await??;
-                let state: State = match read(&dev.mb_state).await?? {
-                    State::Full => State::Full,
-                    State::Charging if current > 0 => State::Charging,
-                    State::Charging => State::Discharging,
-                    State::Discharging => State::Discharging,
-                };
                 Ok(MainBattery {
-                    state,
+                    state: get_state(dev,current).await?,
                     current,
                     voltage: read(&dev.mb_voltage).await??,
                     limit: read(&dev.mb_limit).await??,
                 })
             }
             Model::PinePhone => {
+                let limit: u32 = read(&dev.mb_limit).await??;
                 let current_abs: i32 = read(&dev.mb_current).await??;
-                let state: State = read(&dev.mb_state).await??;
-                let current = match state {
-                    State::Charging | State::Full => current_abs,
-                    State::Discharging => !current_abs,
+                // this hack works around a kernel bug that causes
+                // only abs(current) to be reported. It isnt't
+                // perfect, but it catches the obvious cases.
+                let current = if current_abs > ((limit as i32) + (limit as i32 >> 2)) {
+                    !current_abs
+                } else {
+                    current_abs
                 };
                 Ok(MainBattery {
-                    state,
+                    state: get_state(dev, current).await?,
                     current,
                     voltage: read(&dev.mb_voltage).await??,
-                    limit: read(&dev.mb_limit).await??,
+                    limit,
                 })
             }
         }
@@ -280,7 +284,7 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             }
         }
         State::Full => {
-            if info.kbd.enabled {
+            if info.kbd.enabled && *kb_charging {
                 Action::SetMax
             } else {
                 Action::SetDefault
