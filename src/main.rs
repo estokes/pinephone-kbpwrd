@@ -37,7 +37,7 @@ impl Model {
         static PPP: [u32; 10] = [
             80000, 450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
         ];
-        static PP: [u32; 7] = [100000, 500000, 900000, 1500000, 2000000, 2500000, 3000000];
+        static PP: [u32; 6] = [500000, 900000, 1500000, 2000000, 2500000, 3000000];
         match self {
             Model::PinePhonePro => &PPP,
             Model::PinePhone => &PP,
@@ -48,7 +48,7 @@ impl Model {
     fn default_limit(&self) -> u32 {
         match self {
             Model::PinePhonePro => self.valid_limits()[1],
-            Model::PinePhone => self.valid_limits()[1],
+            Model::PinePhone => self.valid_limits()[0],
         }
     }
 
@@ -56,7 +56,7 @@ impl Model {
     fn max_limit(&self) -> u32 {
         match self {
             Model::PinePhonePro => self.valid_limits()[9],
-            Model::PinePhone => self.valid_limits()[6],
+            Model::PinePhone => self.valid_limits()[5],
         }
     }
 
