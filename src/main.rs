@@ -52,7 +52,7 @@ impl Model {
         }
     }
 
-    // return the default input current limit
+    // return the max input current limit
     fn max_limit(&self) -> u32 {
         match self {
             Model::PinePhonePro => self.valid_limits()[8],
