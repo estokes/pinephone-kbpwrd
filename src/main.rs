@@ -252,7 +252,7 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                     State::Discharging => {
                         let mb = info.mb.current.abs();
                         let kb = info.kbd.current.abs();
-                        if mb >= (kb >> 1) {
+                        if mb > kb {
                             Action::MaybeStepUp
                         } else {
                             Action::Pass
