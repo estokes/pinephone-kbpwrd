@@ -34,8 +34,8 @@ impl Model {
 
     // valid values that can be written to input_current_limit
     fn valid_limits(&self) -> &'static [u32] {
-        static PPP: [u32; 10] = [
-            80000, 450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
+        static PPP: [u32; 9] = [
+            450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
         ];
         static PP: [u32; 6] = [500000, 900000, 1500000, 2000000, 2500000, 3000000];
         match self {
@@ -47,7 +47,7 @@ impl Model {
     // return the default input current limit
     fn default_limit(&self) -> u32 {
         match self {
-            Model::PinePhonePro => self.valid_limits()[1],
+            Model::PinePhonePro => self.valid_limits()[0],
             Model::PinePhone => self.valid_limits()[0],
         }
     }
@@ -55,7 +55,7 @@ impl Model {
     // return the default input current limit
     fn max_limit(&self) -> u32 {
         match self {
-            Model::PinePhonePro => self.valid_limits()[9],
+            Model::PinePhonePro => self.valid_limits()[8],
             Model::PinePhone => self.valid_limits()[5],
         }
     }
