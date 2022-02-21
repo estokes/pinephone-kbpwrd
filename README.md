@@ -19,10 +19,22 @@ hardware.
 
 ## Current State
 
-At the moment it is only working on the pinephone pro, mainly because
-that is it's development platform, but also because the PPP has more
-need of it due to it's higher power consumption. I do plan to make it
-work on the pinephone at some point.
+Now working on the pinephone and pinephone pro. The pinephone has an
+unfortunate kernel bug that causes it to report the absolute value of
+the current instead of the actual value. This issue combined with the
+problem that the battery state is always Charging if a charger is
+connected, even if the battery is actually discharging, means that I
+have to use a heuristic to guess when the battery is discharging. It
+works fine most of the time, but there will be cases where I guess
+wrong. This isn't as bad as it sounds, since the default limit of
+500mA is almost always the correct value for the pinephone.
+
+## Todo
+
+- Guess the keyboard battery state of charge in order to make a better
+  descision about which battery should take the load
+
+- Gather more runtime data
 
 ## Installation
 
