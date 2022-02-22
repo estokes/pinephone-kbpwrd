@@ -86,6 +86,7 @@ struct Device {
     kb_limit: PathBuf,
     kb_enabled: PathBuf,
     mb_state: PathBuf,
+    mb_soc: PathBuf,
     mb_voltage: PathBuf,
     mb_current: PathBuf,
     mb_limit: PathBuf,
@@ -103,6 +104,7 @@ impl Device {
                 kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
                 kb_enabled: base.join("ip5xxx-boost/online"),
                 mb_state: base.join("battery/status"),
+                mb_soc: base.join("battery/capacity"),
                 mb_voltage: base.join("battery/voltage_now"),
                 mb_current: base.join("battery/current_now"),
                 mb_limit: base.join("rk818-usb/input_current_limit"),
@@ -115,6 +117,7 @@ impl Device {
                 kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
                 kb_enabled: base.join("ip5xxx-boost/online"),
                 mb_state: base.join("axp20x-battery/status"),
+                mb_soc: base.join("axp20x-battery/capacity"),
                 mb_voltage: base.join("axp20x-battery/voltage_now"),
                 mb_current: base.join("axp20x-battery/current_now"),
                 mb_limit: base.join("axp20x-usb/input_current_limit"),
@@ -200,6 +203,7 @@ impl KeyboardBattery {
 #[derive(Debug)]
 struct MainBattery {
     state: State,
+    soc: u32,
     voltage: u32,
     current: i32,
     limit: u32,
@@ -220,6 +224,7 @@ impl MainBattery {
                 let current: i32 = read(&dev.mb_current).await??;
                 Ok(MainBattery {
                     state: get_state(dev, current).await?,
+                    soc: read(&dev.mb_soc).await??,
                     current,
                     voltage: read(&dev.mb_voltage).await??,
                     limit: read(&dev.mb_limit).await??,
@@ -238,6 +243,7 @@ impl MainBattery {
                 };
                 Ok(MainBattery {
                     state: get_state(dev, current).await?,
+                    soc: read(&dev.mb_soc).await??,
                     current,
                     voltage: read(&dev.mb_voltage).await??,
                     limit,
@@ -297,8 +303,8 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             } else {
                 match info.mb.state {
                     State::Full => Action::SetDefault,
-                    State::Charging => Action::MaybeStepDown,
-                    State::Discharging => {
+                    State::Charging if info.mb.soc > 20 => Action::MaybeStepDown,
+                    State::Discharging if info.mb.soc > 20 => {
                         const VDIF: u32 = 150000;
                         const VSAME: u32 = 50000;
                         let mbv = info.mb.voltage;
@@ -319,6 +325,10 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                             Action::Pass
                         }
                     }
+                    // keep the main battery above 20% for as long as
+                    // possible even if that means charging it.
+                    State::Charging => Action::Pass,
+                    State::Discharging => Action::MaybeStepUp,
                 }
             }
         }
