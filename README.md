@@ -35,7 +35,8 @@ There are a few benefits to this approach,
 - To some extent this is also true for power electronics
 - Since we roughly match the state of charge of the keyboard to the
   phone, the phone's fuel gauge is a reasonable approximation of the
-  actual state of charge.
+  actual state of charge. This is sadly only true when both batteries
+  start from a full charge.
 
 ## Current State
 
