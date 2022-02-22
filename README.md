@@ -17,6 +17,26 @@ the charging losses (the step up and step down is unavoidable). As
 such this daemon seeks to do exactly that, within the limits of the
 hardware.
 
+It seeks to both avoid charging the internal battery with the keyboard
+battery, and to keep both batteries at roughly the same state of
+charge, by changing the input current limit of the internal battery in
+response to the current load and a set of heristics. The only
+exception to this rule is that it will charge the internal battery if
+it falls below 20%, to prevent the phone from completely discharging
+while the keyboard battery still has capacity (quite critical on the
+PPP, as a complete discharge there can mean spending hours in maskrom
+mode before a bootup is possible).
+
+There are a few benefits to this approach,
+
+- LiPo batteries (and batteries in general) are more efficient at
+  light loads relative to their capacity, so we should get longer
+  runtimes at e.g. C/10 vs at C/2
+- To some extent this is also true for power electronics
+- Since we roughly match the state of charge of the keyboard to the
+  phone, the phone's fuel gauge is a reasonable approximation of the
+  actual state of charge.
+
 ## Current State
 
 Now working on the pinephone and pinephone pro. The pinephone has an
@@ -28,6 +48,16 @@ have to use a heuristic to guess when the battery is discharging. It
 works fine most of the time, but there will be cases where I guess
 wrong. This isn't as bad as it sounds, since the default limit of
 500mA is almost always the correct value for the pinephone.
+
+Unfortunatly the powerbank ic in use in the keyboard does not
+prioritize feeding the load over charging the internal battery. That
+means that when connecting to a charger after being deeply discharged
+the keyboard battery has to complete the constant current portion of
+it's charge cycle before the keyboard is able to deliver more than
+about 500mA to the phone. Once the keyboard moves to the constant
+voltage phase of charging the extra current up to the keyboard's input
+limit can be sent to the phone. How long this will take depends on how
+deeply discharged the keyboard battery was.
 
 ## Todo
 
