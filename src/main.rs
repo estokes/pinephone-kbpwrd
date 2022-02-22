@@ -297,7 +297,7 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             } else {
                 match info.mb.state {
                     State::Full => Action::SetDefault,
-                    State::Charging => Action::StepDown,
+                    State::Charging => Action::MaybeStepDown,
                     State::Discharging => {
                         const VDIF: u32 = 150000;
                         const VSAME: u32 = 50000;
