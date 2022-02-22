@@ -328,9 +328,9 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                     State::Charging => {
                         let delta = info.mb.limit - dev.model.limit_step(false, info.mb.limit);
                         if info.mb.current > 0 && delta < info.mb.current as u32 {
-                            Action::Pass
-                        } else {
                             Action::MaybeStepDown
+                        } else {
+                            Action::Pass
                         }
                     },
                     State::Discharging => Action::MaybeStepUp,
