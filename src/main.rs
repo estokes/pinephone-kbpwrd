@@ -34,8 +34,8 @@ impl Model {
 
     // valid values that can be written to input_current_limit
     fn valid_limits(&self) -> &'static [u32] {
-        static PPP: [u32; 9] = [
-            450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
+        static PPP: [u32; 10] = [
+            80000, 450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
         ];
         static PP: [u32; 6] = [500000, 900000, 1500000, 2000000, 2500000, 3000000];
         match self {
@@ -47,7 +47,7 @@ impl Model {
     // return the default input current limit
     fn default_limit(&self) -> u32 {
         match self {
-            Model::PinePhonePro => self.valid_limits()[0],
+            Model::PinePhonePro => self.valid_limits()[1],
             Model::PinePhone => self.valid_limits()[0],
         }
     }
@@ -219,7 +219,7 @@ impl MainBattery {
             Model::PinePhonePro => {
                 let current: i32 = read(&dev.mb_current).await??;
                 Ok(MainBattery {
-                    state: get_state(dev,current).await?,
+                    state: get_state(dev, current).await?,
                     current,
                     voltage: read(&dev.mb_voltage).await??,
                     limit: read(&dev.mb_limit).await??,
@@ -299,9 +299,21 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                     State::Full => Action::SetDefault,
                     State::Charging => Action::MaybeStepDown,
                     State::Discharging => {
-                        let mb = info.mb.current.abs();
-                        let kb = info.kbd.current.abs();
-                        if mb > kb {
+                        const VDIF: u32 = 150000;
+                        const VSAME: u32 = 50000;
+                        let mbv = info.mb.voltage;
+                        let kbv = info.kbd.voltage;
+                        let mbc = info.mb.current.abs();
+                        let kbc = info.kbd.current.abs();
+                        if mbv > kbv && mbv - kbv > VDIF {
+                            Action::MaybeStepDown
+                        } else if kbv >= mbv && kbv - mbv > VDIF {
+                            Action::MaybeStepUp
+                        } else if (mbv >= kbv && mbv - kbv < VSAME)
+                            || (kbv >= mbv && kbv - mbv < VSAME)
+                        {
+                            Action::Pass
+                        } else if mbc > kbc {
                             Action::MaybeStepUp
                         } else {
                             Action::Pass
