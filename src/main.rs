@@ -313,8 +313,6 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                         let kbc = info.kbd.current.abs();
                         if mbv > kbv && mbv - kbv > VDIF {
                             Action::MaybeStepDown
-                        } else if kbv >= mbv && kbv - mbv > VDIF {
-                            Action::MaybeStepUp
                         } else if (mbv >= kbv && mbv - kbv < VSAME)
                             || (kbv >= mbv && kbv - mbv < VSAME)
                         {
