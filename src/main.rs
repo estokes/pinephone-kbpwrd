@@ -325,7 +325,14 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                     }
                     // keep the main battery above 20% for as long as
                     // possible even if that means charging it.
-                    State::Charging => Action::Pass,
+                    State::Charging => {
+                        let delta = info.mb.limit - dev.model.limit_step(false, info.mb.limit);
+                        if info.mb.current > 0 && delta < info.mb.current as u32 {
+                            Action::Pass
+                        } else {
+                            Action::MaybeStepDown
+                        }
+                    },
                     State::Discharging => Action::MaybeStepUp,
                 }
             }
