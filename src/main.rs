@@ -273,11 +273,8 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                 *kb_charging = true;
                 Action::SetDefault
             } else {
-                let kbl = info.kbd.limit;
-                let kb = info.kbd.current;
-                let mb = info.mb.current;
-                let tot = kb + max(0, mb);
-                if mb < (kb >> 1) || tot < (kbl - (kbl / 5)) as i32 {
+                let tot = info.kbd.current + max(0, info.mb.current);
+                if tot < (info.kbd.limit - (info.kbd.limit / 5)) as i32 {
                     Action::MaybeStepUp
                 } else if tot >= info.kbd.limit as i32 {
                     Action::SetDefault
