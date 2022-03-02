@@ -34,10 +34,10 @@ impl Model {
 
     // valid values that can be written to input_current_limit
     fn valid_limits(&self) -> &'static [u32] {
-        static PPP: [u32; 10] = [
-            80000, 450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
+        static PPP: [u32; 6] = [
+            450000, 850000, 1000000, 1250000, 1500000, 2000000
         ];
-        static PP: [u32; 6] = [500000, 900000, 1500000, 2000000, 2500000, 3000000];
+        static PP: [u32; 4] = [500000, 900000, 1500000, 2000000];
         match self {
             Model::PinePhonePro => &PPP,
             Model::PinePhone => &PP,
@@ -47,7 +47,7 @@ impl Model {
     // return the default input current limit
     fn default_limit(&self) -> u32 {
         match self {
-            Model::PinePhonePro => self.valid_limits()[1],
+            Model::PinePhonePro => self.valid_limits()[0],
             Model::PinePhone => self.valid_limits()[0],
         }
     }
@@ -55,8 +55,8 @@ impl Model {
     // return the max input current limit
     fn max_limit(&self) -> u32 {
         match self {
-            Model::PinePhonePro => self.valid_limits()[8],
-            Model::PinePhone => self.valid_limits()[5],
+            Model::PinePhonePro => self.valid_limits()[5],
+            Model::PinePhone => self.valid_limits()[3],
         }
     }
 
@@ -303,8 +303,8 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             } else {
                 match info.mb.state {
                     State::Full => Action::SetDefault,
-                    State::Charging if info.mb.soc > 20 => Action::MaybeStepDown,
-                    State::Discharging if info.mb.soc > 20 => {
+                    State::Charging if info.mb.soc > 30 => Action::MaybeStepDown,
+                    State::Discharging if info.mb.soc > 30 => {
                         const VDIF: u32 = 150000;
                         const VSAME: u32 = 50000;
                         let mbv = info.mb.voltage;
