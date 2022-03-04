@@ -306,15 +306,14 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                     State::Charging if info.mb.soc > 30 => Action::MaybeStepDown,
                     State::Discharging if info.mb.soc > 30 => {
                         const VDIF: u32 = 150000;
-                        const VSAME: u32 = 50000;
                         let mbv = info.mb.voltage;
                         let kbv = info.kbd.voltage;
                         let mbc = info.mb.current.abs();
                         let kbc = info.kbd.current.abs();
                         if mbv > kbv && mbv - kbv > VDIF {
                             Action::MaybeStepDown
-                        } else if (mbv >= kbv && mbv - kbv < VSAME)
-                            || (kbv >= mbv && kbv - mbv < VSAME)
+                        } else if (mbv >= kbv && mbv - kbv < VDIF)
+                            || (kbv >= mbv && kbv - mbv < VDIF)
                         {
                             Action::Pass
                         } else if mbc > kbc {
