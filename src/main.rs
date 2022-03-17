@@ -34,9 +34,7 @@ impl Model {
 
     // valid values that can be written to input_current_limit
     fn valid_limits(&self) -> &'static [u32] {
-        static PPP: [u32; 6] = [
-            450000, 850000, 1000000, 1250000, 1500000, 2000000
-        ];
+        static PPP: [u32; 6] = [450000, 850000, 1000000, 1250000, 1500000, 2000000];
         static PP: [u32; 4] = [500000, 900000, 1500000, 2000000];
         match self {
             Model::PinePhonePro => &PPP,
@@ -285,13 +283,20 @@ enum Action {
     Pass,
 }
 
-async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> Result<()> {
+struct Ctx {
+    kb_charging: bool,
+    last_step: Instant,
+    last_offline: Instant,
+}
+
+async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
     const STEP: Duration = Duration::from_secs(10);
+    const OFFLINE: Duration = Duration::from_secs(30);
     let info = dev.info().await?;
     let action = match info.kbd.state {
         State::Charging => {
-            if !*kb_charging {
-                *kb_charging = true;
+            if !ctx.kb_charging {
+                ctx.kb_charging = true;
                 Action::SetDefault
             } else {
                 let tot = info.kbd.current + max(0, info.mb.current);
@@ -305,15 +310,15 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             }
         }
         State::Full => {
-            if info.kbd.enabled && *kb_charging {
+            if info.kbd.enabled && ctx.kb_charging {
                 Action::SetMax
             } else {
                 Action::SetDefault
             }
         }
         State::Discharging => {
-            if *kb_charging {
-                *kb_charging = false;
+            if ctx.kb_charging {
+                ctx.kb_charging = false;
                 Action::SetDefault
             } else {
                 match info.mb.state {
@@ -366,13 +371,18 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
         info.kbd.soc,
         action
     );
+    // if the boost is left offline too long we lose communication with it
+    if !info.kbd.enabled && ctx.last_offline.elapsed() > OFFLINE {
+        ctx.last_step = Instant::now();
+        dev.set_online(true).await?;
+    }
     match action {
         Action::Pass => (),
         Action::MaybeStepUp | Action::StepUp => {
-            if (action == Action::StepUp || last_step.elapsed() > STEP)
+            if (action == Action::StepUp || ctx.last_step.elapsed() > STEP)
                 && info.mb.limit < info.kbd.limit
             {
-                *last_step = Instant::now();
+                ctx.last_step = Instant::now();
                 if !info.kbd.enabled {
                     dev.set_online(true).await?;
                 } else {
@@ -381,9 +391,10 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             }
         }
         Action::MaybeStepDown | Action::StepDown => {
-            if action == Action::StepDown || last_step.elapsed() > STEP {
-                *last_step = Instant::now();
+            if action == Action::StepDown || ctx.last_step.elapsed() > STEP {
+                ctx.last_step = Instant::now();
                 if info.mb.limit == dev.model.min_limit() {
+                    ctx.last_offline = Instant::now();
                     dev.set_online(false).await?;
                 } else {
                     dev.set_limit_step(false, info.mb.limit).await?;
@@ -391,12 +402,12 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
             }
         }
         Action::SetDefault => {
-            *last_step = Instant::now();
+            ctx.last_step = Instant::now();
             dev.set_online(true).await?;
             dev.set_limit_default(info.mb.limit).await?
         }
         Action::SetMax => {
-            *last_step = Instant::now();
+            ctx.last_step = Instant::now();
             dev.set_online(true).await?;
             dev.set_limit_max(info.mb.limit).await?
         }
@@ -408,11 +419,14 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
 async fn main() -> Result<()> {
     env_logger::init();
     let dev = Device::new(Model::detect()?);
-    let mut kb_charging = false;
-    let mut last_step = Instant::now();
+    let mut ctx = Ctx {
+        kb_charging: false,
+        last_step: Instant::now(),
+        last_offline: Instant::now(),
+    };
     loop {
         time::sleep(Duration::from_secs(1)).await;
-        if let Err(e) = step(&dev, &mut kb_charging, &mut last_step).await {
+        if let Err(e) = step(&dev, &mut ctx).await {
             error!("error: {} will retry", e);
         }
     }
