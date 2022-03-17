@@ -60,6 +60,10 @@ impl Model {
         }
     }
 
+    fn min_limit(&self) -> u32 {
+        self.valid_limits()[0]
+    }
+
     // given the current input_curent_limit, step one increment up or down and return the new value
     fn limit_step(&self, up: bool, cur: u32) -> u32 {
         let valid = self.valid_limits();
@@ -80,6 +84,7 @@ impl Model {
 
 struct Device {
     model: Model,
+    kb_soc: PathBuf,
     kb_state: PathBuf,
     kb_voltage: PathBuf,
     kb_current: PathBuf,
@@ -100,6 +105,7 @@ impl Device {
                 model,
                 kb_current: base.join("ip5xxx-charger/current_now"),
                 kb_voltage: base.join("ip5xxx-charger/voltage_now"),
+                kb_soc: base.join("ip5xxx-charger/capacity"),
                 kb_state: base.join("ip5xxx-charger/status"),
                 kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
                 kb_enabled: base.join("ip5xxx-boost/online"),
@@ -113,6 +119,7 @@ impl Device {
                 model,
                 kb_current: base.join("ip5xxx-charger/current_now"),
                 kb_voltage: base.join("ip5xxx-charger/voltage_now"),
+                kb_soc: base.join("ip5xxx-charger/capacity"),
                 kb_state: base.join("ip5xxx-charger/status"),
                 kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
                 kb_enabled: base.join("ip5xxx-boost/online"),
@@ -123,6 +130,12 @@ impl Device {
                 mb_limit: base.join("axp20x-usb/input_current_limit"),
             },
         }
+    }
+
+    async fn set_online(&self, online: bool) -> Result<()> {
+        info!("setting online: {}", online);
+        let online = if online { "1" } else { "0" };
+        Ok(fs::write(&self.kb_enabled, online).await?)
     }
 
     async fn set_limit(&self, limit: u32) -> Result<()> {
@@ -182,6 +195,7 @@ impl FromStr for State {
 #[derive(Debug)]
 struct KeyboardBattery {
     state: State,
+    soc: u32,
     voltage: u32,
     current: i32,
     limit: u32,
@@ -191,6 +205,7 @@ struct KeyboardBattery {
 impl KeyboardBattery {
     async fn get(dev: &Device) -> Result<KeyboardBattery> {
         Ok(KeyboardBattery {
+            soc: read(&dev.kb_soc).await??,
             state: read(&dev.kb_state).await??,
             voltage: read(&dev.kb_voltage).await??,
             current: read(&dev.kb_current).await??,
@@ -338,15 +353,17 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
         }
     };
     info!(
-        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}, act: {:?}",
+        "ph v: {}, a: {}, s: {:?}, l: {}, c: {}, kb v: {}, a: {}, s: {:?}, l: {}, c: {}, act: {:?}",
         info.mb.voltage / 1000,
         info.mb.current / 1000,
         info.mb.state,
         info.mb.limit / 1000,
+        info.mb.soc,
         info.kbd.voltage / 1000,
         info.kbd.current / 1000,
         info.kbd.state,
         info.kbd.limit / 1000,
+        info.kbd.soc,
         action
     );
     match action {
@@ -356,21 +373,31 @@ async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> 
                 && info.mb.limit < info.kbd.limit
             {
                 *last_step = Instant::now();
-                dev.set_limit_step(true, info.mb.limit).await?;
+                if !info.kbd.enabled {
+                    dev.set_online(true).await?;
+                } else {
+                    dev.set_limit_step(true, info.mb.limit).await?;
+                }
             }
         }
         Action::MaybeStepDown | Action::StepDown => {
             if action == Action::StepDown || last_step.elapsed() > STEP {
                 *last_step = Instant::now();
-                dev.set_limit_step(false, info.mb.limit).await?;
+                if info.mb.limit == dev.model.min_limit() {
+                    dev.set_online(false).await?;
+                } else {
+                    dev.set_limit_step(false, info.mb.limit).await?;
+                }
             }
         }
         Action::SetDefault => {
             *last_step = Instant::now();
+            dev.set_online(true).await?;
             dev.set_limit_default(info.mb.limit).await?
         }
         Action::SetMax => {
             *last_step = Instant::now();
+            dev.set_online(true).await?;
             dev.set_limit_max(info.mb.limit).await?
         }
     }
