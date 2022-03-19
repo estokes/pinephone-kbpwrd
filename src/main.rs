@@ -130,10 +130,14 @@ impl Device {
         }
     }
 
-    async fn set_online(&self, online: bool) -> Result<()> {
-        info!("setting online: {}", online);
-        let online = if online { "1" } else { "0" };
-        Ok(fs::write(&self.kb_enabled, online).await?)
+    async fn set_online(&self, desired: bool, cur: bool) -> Result<()> {
+        if desired != cur {
+            info!("setting online: {}", desired);
+            let desired = if desired { "1" } else { "0" };
+            Ok(fs::write(&self.kb_enabled, desired).await?)
+        } else {
+            Ok(())
+        }
     }
 
     async fn set_limit(&self, limit: u32) -> Result<()> {
@@ -374,7 +378,7 @@ async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
     // if the boost is left offline too long we lose communication with it
     if !info.kbd.enabled && ctx.last_offline.elapsed() > OFFLINE {
         ctx.last_step = Instant::now();
-        dev.set_online(true).await?;
+        dev.set_online(true, info.kbd.enabled).await?;
     }
     match action {
         Action::Pass => (),
@@ -384,7 +388,7 @@ async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
             {
                 ctx.last_step = Instant::now();
                 if !info.kbd.enabled {
-                    dev.set_online(true).await?;
+                    dev.set_online(true, info.kbd.enabled).await?;
                 } else {
                     dev.set_limit_step(true, info.mb.limit).await?;
                 }
@@ -395,7 +399,7 @@ async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
                 ctx.last_step = Instant::now();
                 if info.mb.limit == dev.model.min_limit() {
                     ctx.last_offline = Instant::now();
-                    dev.set_online(false).await?;
+                    dev.set_online(false, info.kbd.enabled).await?;
                 } else {
                     dev.set_limit_step(false, info.mb.limit).await?;
                 }
@@ -403,12 +407,12 @@ async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
         }
         Action::SetDefault => {
             ctx.last_step = Instant::now();
-            dev.set_online(true).await?;
+            dev.set_online(true, info.kbd.enabled).await?;
             dev.set_limit_default(info.mb.limit).await?
         }
         Action::SetMax => {
             ctx.last_step = Instant::now();
-            dev.set_online(true).await?;
+            dev.set_online(true, info.kbd.enabled).await?;
             dev.set_limit_max(info.mb.limit).await?
         }
     }
