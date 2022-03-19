@@ -1,3 +1,8 @@
+0.1.5:
+  - report keyboard case and main battery state of charge
+  - turn off keyboard case charging briefly in the case we are at the
+    minimum limit and we still want to step down
+
 0.1.4:
   - cap the main battery discharge at 20% while the keyboard has power
 

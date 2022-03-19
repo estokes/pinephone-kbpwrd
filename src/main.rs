@@ -197,7 +197,7 @@ impl FromStr for State {
 #[derive(Debug)]
 struct KeyboardBattery {
     state: State,
-    soc: u32,
+    soc: Option<u32>,
     voltage: u32,
     current: i32,
     limit: u32,
@@ -207,8 +207,8 @@ struct KeyboardBattery {
 impl KeyboardBattery {
     async fn get(dev: &Device) -> Result<KeyboardBattery> {
         Ok(KeyboardBattery {
-            soc: read(&dev.kb_soc).await??,
             state: read(&dev.kb_state).await??,
+            soc: read(&dev.kb_soc).await.ok().and_then(|v| v.ok()),
             voltage: read(&dev.kb_voltage).await??,
             current: read(&dev.kb_current).await??,
             limit: read(&dev.kb_limit).await??,
@@ -346,7 +346,7 @@ async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
                             Action::Pass
                         }
                     }
-                    // keep the main battery above 20% for as long as
+                    // keep the main battery above 30% for as long as
                     // possible even if that means charging it.
                     State::Charging => {
                         let delta = info.mb.limit - dev.model.limit_step(false, info.mb.limit);
@@ -372,7 +372,10 @@ async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
         info.kbd.current / 1000,
         info.kbd.state,
         info.kbd.limit / 1000,
-        info.kbd.soc,
+        match info.kbd.soc {
+            Some(v) => v.to_string(),
+            None => "n/a".into(),
+        },
         action
     );
     // if the boost is left offline too long we lose communication with it
