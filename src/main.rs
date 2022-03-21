@@ -295,7 +295,7 @@ struct Ctx {
 
 async fn step(dev: &Device, ctx: &mut Ctx) -> Result<()> {
     const STEP: Duration = Duration::from_secs(10);
-    const OFFLINE: Duration = Duration::from_secs(30);
+    const OFFLINE: Duration = Duration::from_secs(20);
     let info = dev.info().await?;
     let action = match info.kbd.state {
         State::Charging => {
