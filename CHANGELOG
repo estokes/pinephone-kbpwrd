@@ -1,3 +1,6 @@
+0.1.6:
+  - shorten the max boster off time to prevent losing control of the keyboard.
+
 0.1.5:
   - report keyboard case and main battery state of charge
   - turn off keyboard case charging briefly in the case we are at the
