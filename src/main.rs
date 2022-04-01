@@ -448,8 +448,8 @@ impl Ctx {
             Action::MaybePhUpKbDown | Action::MaybeKbUpPhDown => {
                 let dir = action == Action::MaybePhUpKbDown;
                 self.maybe_step(|ctx| async {
-                    ctx.dev.set_online(dir, info.kbd.enabled).await?;
-                    let lim = ctx.dev.model.limit_step(true, info.mb.limit);
+                    ctx.dev.set_online(true, info.kbd.enabled).await?;
+                    let lim = ctx.dev.model.limit_step(dir, info.mb.limit);
                     ctx.dev.set_kb_limit(KBLIM as u32 - lim).await?;
                     ctx.dev.set_limit_step(dir, info.mb.limit).await?;
                     Ok(())
