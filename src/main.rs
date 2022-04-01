@@ -310,13 +310,15 @@ impl Ctx {
                     self.kb_charging = true;
                     Action::SetDefault
                 } else {
-                    let lim = KBLIM + KBLIM >> 3;
-                    let tot = info.kbd.current + info.mb.limit as i32;
-                    if tot < KBLIM && info.mb.current < 0 {
+                    let lim = KBLIM + (KBLIM >> 4);
+                    let ka = info.kbd.current;
+                    let tot = ka + info.mb.limit as i32;
+                    let nextl = self.dev.model.limit_step(true, info.mb.limit) as i32;
+                    if ka + nextl < lim && info.mb.current < 0 {
                         Action::MaybeStepUp
-                    } else if tot >= KBLIM && info.mb.current < 0 {
+                    } else if info.mb.current < 0 {
                         Action::MaybePhUpKbDown
-                    } else if tot >= lim && info.mb.current >= 0 {
+                    } else if tot >= lim {
                         Action::MaybeStepDown
                     } else if tot < KBLIM {
                         Action::MaybeStepKbUp
