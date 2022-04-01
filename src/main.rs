@@ -325,7 +325,7 @@ impl Ctx {
                         Action::MaybeStepDown
                     } else if tot < KBLIM && (kl as i32) < KBLIM {
                         Action::MaybeStepKbUp
-                    } else if ma >= ka && ka < KBLIM {
+                    } else if ma >= ka && ka >= KBLIM {
                         Action::MaybeKbUpPhDown
                     } else {
                         Action::Pass
