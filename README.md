@@ -35,8 +35,7 @@ There are a few benefits to this approach,
 - To some extent this is also true for power electronics
 - Since we roughly match the state of charge of the keyboard to the
   phone, the phone's fuel gauge is a reasonable approximation of the
-  actual state of charge. This is sadly only true when both batteries
-  start from a full charge.
+  actual state of charge.
 
 ## Current State
 
@@ -50,15 +49,16 @@ works fine most of the time, but there will be cases where I guess
 wrong. This isn't as bad as it sounds, since the default limit of
 500mA is almost always the correct value for the pinephone.
 
-Unfortunatly the powerbank ic in use in the keyboard does not
-prioritize feeding the load over charging the internal battery. That
-means that when connecting to a charger after being deeply discharged
-the keyboard battery has to complete the constant current portion of
-it's charge cycle before the keyboard is able to deliver more than
-about 500mA to the phone. Once the keyboard moves to the constant
-voltage phase of charging the extra current up to the keyboard's input
-limit can be sent to the phone. How long this will take depends on how
-deeply discharged the keyboard battery was.
+The powerbank ic in use in the keyboard does not really deal well with
+balacing charging it's own battery and feeding the load. If you leave
+it at the default current limit and increase the phone current limit
+when both batteries are deeply discharged it will draw too much
+current and shutdown/restart in a loop while getting pretty warm. The
+daemon manages the limits when charging in order to prevent this from
+happening. It will always try to keep both batteries charging, but
+will prioritize the main battery so the phone doesn't run out of power
+and turn off. It tries to keep within safe limits, and as a result
+might not charge quite as fast as would be technically possible.
 
 ## Todo
 
@@ -94,7 +94,7 @@ scripts yet. I run it as root in a terminal with logging turned on.
 it will then print log messages every second
 
 ```
-2022-02-18T19:28:12Z INFO  kbpwrd] ph v: 4181, c: -192, s: Discharging, l: 450, kb v: 3912, c: -614, s: Discharging, l: 2300, act: Pass
+2022-04-01T01:34:46Z INFO  kbpwrd] ph v: 3923, a: 469, s: Charging, l: 850, c: 47, kb v: 4071, a: 1527, s: Charging, l: 1500, c: 48, act: Pass
 
 ```
 

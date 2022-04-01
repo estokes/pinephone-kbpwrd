@@ -287,6 +287,7 @@ enum Action {
     MaybeStepUp,
     MaybeStepDown,
     MaybePhUpKbDown,
+    MaybeKbUpPhDown,
     MaybeStepKbUp,
     SetDefault,
     SetMax,
@@ -312,16 +313,19 @@ impl Ctx {
                 } else {
                     let lim = KBLIM + (KBLIM >> 4);
                     let ka = info.kbd.current;
+                    let ma = info.mb.current;
                     let tot = ka + info.mb.limit as i32;
                     let nextl = self.dev.model.limit_step(true, info.mb.limit) as i32;
-                    if ka + nextl < lim && info.mb.current < 0 {
+                    if ka + nextl < lim && ma < 0 {
                         Action::MaybeStepUp
-                    } else if info.mb.current < 0 {
+                    } else if ma < 0 {
                         Action::MaybePhUpKbDown
                     } else if tot >= lim {
                         Action::MaybeStepDown
                     } else if tot < KBLIM {
                         Action::MaybeStepKbUp
+                    } else if ma >= ka {
+                        Action::MaybeKbUpPhDown
                     } else {
                         Action::Pass
                     }
@@ -441,12 +445,13 @@ impl Ctx {
                 self.maybe_step(|ctx| async { ctx.step_up(&info).await })
                     .await?
             }
-            Action::MaybePhUpKbDown => {
+            Action::MaybePhUpKbDown | Action::MaybeKbUpPhDown => {
+                let dir = action == Action::MaybePhUpKbDown;
                 self.maybe_step(|ctx| async {
-                    ctx.dev.set_online(true, info.kbd.enabled).await?;
+                    ctx.dev.set_online(dir, info.kbd.enabled).await?;
                     let lim = ctx.dev.model.limit_step(true, info.mb.limit);
                     ctx.dev.set_kb_limit(KBLIM as u32 - lim).await?;
-                    ctx.dev.set_limit_step(true, info.mb.limit).await?;
+                    ctx.dev.set_limit_step(dir, info.mb.limit).await?;
                     Ok(())
                 })
                 .await?
