@@ -313,6 +313,7 @@ impl Ctx {
                 } else {
                     let lim = KBLIM + (KBLIM >> 4);
                     let ka = info.kbd.current;
+                    let kl = info.kbd.limit;
                     let ma = info.mb.current;
                     let tot = ka + info.mb.limit as i32;
                     let nextl = self.dev.model.limit_step(true, info.mb.limit) as i32;
@@ -322,7 +323,7 @@ impl Ctx {
                         Action::MaybePhUpKbDown
                     } else if tot >= lim {
                         Action::MaybeStepDown
-                    } else if tot < KBLIM {
+                    } else if tot < KBLIM && (kl as i32) < KBLIM {
                         Action::MaybeStepKbUp
                     } else if ma >= ka && ka < KBLIM {
                         Action::MaybeKbUpPhDown
