@@ -1,3 +1,7 @@
+0.1.7:
+  - new alogorithm to manage charging, deailed in the readme. The main
+    battery should now always charge when the kbd is plugged in.
+
 0.1.6:
   - shorten the max boster off time to prevent losing control of the keyboard.
 
