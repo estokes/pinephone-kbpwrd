@@ -469,13 +469,17 @@ impl Ctx {
                 self.last_step = Instant::now();
                 self.dev.set_online(true, info.kbd.enabled).await?;
                 self.dev.set_limit_default(info.mb.limit).await?;
-                self.dev.set_kb_limit(KBLIM as u32).await?;
+                self.dev
+                    .set_kb_limit(KBLIM as u32 - self.dev.model.default_limit())
+                    .await?;
             }
             Action::SetMax => {
                 self.last_step = Instant::now();
                 self.dev.set_online(true, info.kbd.enabled).await?;
                 self.dev.set_limit_max(info.mb.limit).await?;
-                self.dev.set_kb_limit(KBLIM as u32).await?;
+                self.dev
+                    .set_kb_limit(KBLIM as u32 - self.dev.model.default_limit())
+                    .await?;
             }
         }
         Ok(())
