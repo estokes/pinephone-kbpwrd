@@ -180,7 +180,7 @@ impl Device {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum State {
     Charging,
     Discharging,
@@ -257,7 +257,7 @@ impl MainBattery {
                 let limit: u32 = read(&dev.mb_limit).await??;
                 let current_abs: i32 = read(&dev.mb_current).await??;
                 // this hack works around a kernel bug that causes
-                // only abs(current) to be reported. It isnt't
+                // only abs(current) to be reported. It isn't
                 // perfect, but it catches the obvious cases.
                 let current = if current_abs > ((limit as i32) + (limit as i32 >> 2)) {
                     !current_abs
@@ -312,6 +312,7 @@ impl Ctx {
                     Action::SetDefault
                 } else {
                     let lim = KBLIM + (KBLIM >> 4);
+                    let full = info.mb.state == State::Full;
                     let ka = info.kbd.current;
                     let kl = info.kbd.limit;
                     let ma = info.mb.current;
@@ -319,7 +320,7 @@ impl Ctx {
                     let nextl = self.dev.model.limit_step(true, info.mb.limit) as i32;
                     if ka + nextl < lim && ma < 0 {
                         Action::MaybeStepUp
-                    } else if ma < 0 {
+                    } else if ma < 0 && !full {
                         Action::MaybePhUpKbDown
                     } else if tot >= lim {
                         Action::MaybeStepDown
