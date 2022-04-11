@@ -22,7 +22,7 @@ battery, and to keep both batteries at roughly the same state of
 charge, by changing the input current limit of the internal battery in
 response to the current load and a set of heristics. The only
 exception to this rule is that it will charge the internal battery if
-it falls below 20%, to prevent the phone from completely discharging
+it falls below 30%, to prevent the phone from completely discharging
 while the keyboard battery still has capacity (quite critical on the
 PPP, as a complete discharge there can mean spending hours in maskrom
 mode before a bootup is possible).

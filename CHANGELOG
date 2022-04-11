@@ -1,3 +1,7 @@
+0.1.8:
+  - don't overreact to negative currents when the main battery is full
+    but the kbd battery is not
+
 0.1.7:
   - new alogorithm to manage charging, deailed in the readme. The main
     battery should now always charge when the kbd is plugged in.
