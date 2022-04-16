@@ -1,4 +1,4 @@
-# UPDATE
+# THIS IS DEPRECATED
 
 Megi is integrating this functionality into the kernel, which is where it belongs. As such, this project is now deprecated. Hopefully the kernel functionality will roll out very soon.
 
