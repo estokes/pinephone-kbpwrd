@@ -1,3 +1,7 @@
+# UPDATE
+
+Megi is integrating this functionality into the kernel, which is where it belongs. As such, this project is now deprecated. Hopefully the kernel functionality will roll out very soon.
+
 # PinePhone (Pro) Keyboard Case Power Manager
 
 As described in Megi's blog, the dual battery nature of the keyboard
