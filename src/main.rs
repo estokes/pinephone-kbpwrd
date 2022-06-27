@@ -1,7 +1,8 @@
 use anyhow::{bail, Error, Result};
 use log::{error, info};
 use std::{
-    cmp::{max, min},
+    cmp::min,
+    future::Future,
     path::PathBuf,
     str::FromStr,
     time::{Duration, Instant},
@@ -34,10 +35,8 @@ impl Model {
 
     // valid values that can be written to input_current_limit
     fn valid_limits(&self) -> &'static [u32] {
-        static PPP: [u32; 10] = [
-            80000, 450000, 850000, 1000000, 1250000, 1500000, 2000000, 2250000, 2500000, 3000000,
-        ];
-        static PP: [u32; 6] = [500000, 900000, 1500000, 2000000, 2500000, 3000000];
+        static PPP: [u32; 6] = [450000, 850000, 1000000, 1250000, 1500000, 2000000];
+        static PP: [u32; 4] = [500000, 900000, 1500000, 2000000];
         match self {
             Model::PinePhonePro => &PPP,
             Model::PinePhone => &PP,
@@ -47,17 +46,21 @@ impl Model {
     // return the default input current limit
     fn default_limit(&self) -> u32 {
         match self {
-            Model::PinePhonePro => self.valid_limits()[1],
+            Model::PinePhonePro => self.valid_limits()[0],
             Model::PinePhone => self.valid_limits()[0],
         }
     }
 
-    // return the default input current limit
+    // return the max input current limit
     fn max_limit(&self) -> u32 {
         match self {
-            Model::PinePhonePro => self.valid_limits()[9],
-            Model::PinePhone => self.valid_limits()[5],
+            Model::PinePhonePro => self.valid_limits()[5],
+            Model::PinePhone => self.valid_limits()[3],
         }
+    }
+
+    fn min_limit(&self) -> u32 {
+        self.valid_limits()[0]
     }
 
     // given the current input_curent_limit, step one increment up or down and return the new value
@@ -80,12 +83,14 @@ impl Model {
 
 struct Device {
     model: Model,
+    kb_soc: PathBuf,
     kb_state: PathBuf,
     kb_voltage: PathBuf,
     kb_current: PathBuf,
     kb_limit: PathBuf,
     kb_enabled: PathBuf,
     mb_state: PathBuf,
+    mb_soc: PathBuf,
     mb_voltage: PathBuf,
     mb_current: PathBuf,
     mb_limit: PathBuf,
@@ -111,10 +116,12 @@ impl Device {
                 model,
                 kb_current: base.join("ip5xxx-charger/current_now"),
                 kb_voltage: base.join("ip5xxx-charger/voltage_now"),
+                kb_soc: base.join("ip5xxx-charger/capacity"),
                 kb_state: base.join("ip5xxx-charger/status"),
                 kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
                 kb_enabled: base.join("ip5xxx-boost/online"),
                 mb_state: base.join("axp20x-battery/status"),
+                mb_soc: base.join("axp20x-battery/capacity"),
                 mb_voltage: base.join("axp20x-battery/voltage_now"),
                 mb_current: base.join("axp20x-battery/current_now"),
                 mb_limit: base.join("axp20x-usb/input_current_limit"),
@@ -122,9 +129,24 @@ impl Device {
         }
     }
 
+    async fn set_online(&self, desired: bool, cur: bool) -> Result<()> {
+        if desired != cur {
+            info!("setting online: {}", desired);
+            let desired = if desired { "1" } else { "0" };
+            Ok(fs::write(&self.kb_enabled, desired).await?)
+        } else {
+            Ok(())
+        }
+    }
+
     async fn set_limit(&self, limit: u32) -> Result<()> {
         info!("setting input_current_limit: {}", limit / 1000);
         Ok(fs::write(&self.mb_limit, &format!("{}\n", limit)).await?)
+    }
+
+    async fn set_kb_limit(&self, limit: u32) -> Result<()> {
+        info!("setting kb input_current_limit: {}", limit / 1000);
+        Ok(fs::write(&self.kb_limit, &format!("{}\n", limit)).await?)
     }
 
     async fn set_limit_step(&self, up: bool, cur: u32) -> Result<()> {
@@ -156,7 +178,7 @@ impl Device {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum State {
     Charging,
     Discharging,
@@ -179,6 +201,7 @@ impl FromStr for State {
 #[derive(Debug)]
 struct KeyboardBattery {
     state: State,
+    soc: Option<u32>,
     voltage: u32,
     current: i32,
     limit: u32,
@@ -189,6 +212,7 @@ impl KeyboardBattery {
     async fn get(dev: &Device) -> Result<KeyboardBattery> {
         Ok(KeyboardBattery {
             state: read(&dev.kb_state).await??,
+            soc: read(&dev.kb_soc).await.ok().and_then(|v| v.ok()),
             voltage: read(&dev.kb_voltage).await??,
             current: read(&dev.kb_current).await??,
             limit: read(&dev.kb_limit).await??,
@@ -200,6 +224,7 @@ impl KeyboardBattery {
 #[derive(Debug)]
 struct MainBattery {
     state: State,
+    soc: u32,
     voltage: u32,
     current: i32,
     limit: u32,
@@ -219,7 +244,8 @@ impl MainBattery {
             Model::PinePhonePro => {
                 let current: i32 = read(&dev.mb_current).await??;
                 Ok(MainBattery {
-                    state: get_state(dev,current).await?,
+                    state: get_state(dev, current).await?,
+                    soc: read(&dev.mb_soc).await??,
                     current,
                     voltage: read(&dev.mb_voltage).await??,
                     limit: read(&dev.mb_limit).await??,
@@ -229,7 +255,7 @@ impl MainBattery {
                 let limit: u32 = read(&dev.mb_limit).await??;
                 let current_abs: i32 = read(&dev.mb_current).await??;
                 // this hack works around a kernel bug that causes
-                // only abs(current) to be reported. It isnt't
+                // only abs(current) to be reported. It isn't
                 // perfect, but it catches the obvious cases.
                 let current = if current_abs > ((limit as i32) + (limit as i32 >> 2)) {
                     !current_abs
@@ -238,6 +264,7 @@ impl MainBattery {
                 };
                 Ok(MainBattery {
                     state: get_state(dev, current).await?,
+                    soc: read(&dev.mb_soc).await??,
                     current,
                     voltage: read(&dev.mb_voltage).await??,
                     limit,
@@ -257,109 +284,227 @@ struct Info {
 enum Action {
     MaybeStepUp,
     MaybeStepDown,
-    StepUp,
-    StepDown,
+    MaybePhUpKbDown,
+    MaybeKbUpPhDown,
+    MaybeStepKbUp,
     SetDefault,
     SetMax,
     Pass,
 }
 
-async fn step(dev: &Device, kb_charging: &mut bool, last_step: &mut Instant) -> Result<()> {
-    const STEP: Duration = Duration::from_secs(10);
-    let info = dev.info().await?;
-    let action = match info.kbd.state {
-        State::Charging => {
-            if !*kb_charging {
-                *kb_charging = true;
-                Action::SetDefault
-            } else {
-                let tot = info.kbd.current + max(0, info.mb.current);
-                if tot < (info.kbd.limit - (info.kbd.limit / 5)) as i32 {
-                    Action::MaybeStepUp
-                } else if tot >= info.kbd.limit as i32 {
+struct Ctx {
+    dev: Device,
+    kb_charging: bool,
+    last_step: Instant,
+    last_offline: Instant,
+}
+
+const KBLIM: i32 = 2300000;
+
+impl Ctx {
+    fn decide(&mut self, info: &Info) -> Action {
+        match info.kbd.state {
+            State::Charging => {
+                if !self.kb_charging {
+                    self.kb_charging = true;
                     Action::SetDefault
                 } else {
-                    Action::Pass
+                    let lim = KBLIM + (KBLIM >> 4);
+                    let full = info.mb.state == State::Full;
+                    let ka = info.kbd.current;
+                    let kl = info.kbd.limit;
+                    let ma = info.mb.current;
+                    let tot = ka + info.mb.limit as i32;
+                    let nextl = self.dev.model.limit_step(true, info.mb.limit) as i32;
+                    if ka + nextl < lim && ma < 0 {
+                        Action::MaybeStepUp
+                    } else if ma < 0 && !full {
+                        Action::MaybePhUpKbDown
+                    } else if tot >= lim {
+                        Action::MaybeStepDown
+                    } else if tot < KBLIM && (kl as i32) < KBLIM {
+                        Action::MaybeStepKbUp
+                    } else if ma >= ka && ka >= KBLIM {
+                        Action::MaybeKbUpPhDown
+                    } else {
+                        Action::Pass
+                    }
                 }
             }
-        }
-        State::Full => {
-            if info.kbd.enabled && *kb_charging {
-                Action::SetMax
-            } else {
-                Action::SetDefault
+            State::Full => {
+                if info.kbd.enabled && self.kb_charging {
+                    Action::SetMax
+                } else {
+                    Action::SetDefault
+                }
             }
-        }
-        State::Discharging => {
-            if *kb_charging {
-                *kb_charging = false;
-                Action::SetDefault
-            } else {
-                match info.mb.state {
-                    State::Full => Action::SetDefault,
-                    State::Charging => Action::MaybeStepDown,
-                    State::Discharging => {
-                        let mb = info.mb.current.abs();
-                        let kb = info.kbd.current.abs();
-                        if mb >= (kb >> 1) {
-                            Action::MaybeStepUp
-                        } else {
-                            Action::Pass
+            State::Discharging => {
+                if self.kb_charging {
+                    self.kb_charging = false;
+                    Action::SetDefault
+                } else {
+                    match info.mb.state {
+                        State::Full => Action::SetDefault,
+                        State::Charging if info.mb.soc > 30 => Action::MaybeStepDown,
+                        State::Discharging if info.mb.soc > 30 => {
+                            const VDIF: u32 = 150000;
+                            let mbv = info.mb.voltage;
+                            let kbv = info.kbd.voltage;
+                            let mbc = info.mb.current.abs();
+                            let kbc = info.kbd.current.abs();
+                            if mbv > kbv && mbv - kbv > VDIF {
+                                Action::MaybeStepDown
+                            } else if (mbv >= kbv && mbv - kbv < VDIF)
+                                || (kbv >= mbv && kbv - mbv < VDIF)
+                            {
+                                Action::Pass
+                            } else if mbc > kbc {
+                                Action::MaybeStepUp
+                            } else {
+                                Action::Pass
+                            }
                         }
+                        // keep the main battery above 30% for as long as
+                        // possible even if that means charging it.
+                        State::Charging => {
+                            let delta =
+                                info.mb.limit - self.dev.model.limit_step(false, info.mb.limit);
+                            if info.mb.current > 0 && delta < info.mb.current as u32 {
+                                Action::MaybeStepDown
+                            } else {
+                                Action::Pass
+                            }
+                        }
+                        State::Discharging => Action::MaybeStepUp,
                     }
                 }
             }
         }
-    };
-    info!(
-        "ph v: {}, c: {}, s: {:?}, l: {}, kb v: {}, c: {}, s: {:?}, l: {}, act: {:?}",
-        info.mb.voltage / 1000,
-        info.mb.current / 1000,
-        info.mb.state,
-        info.mb.limit / 1000,
-        info.kbd.voltage / 1000,
-        info.kbd.current / 1000,
-        info.kbd.state,
-        info.kbd.limit / 1000,
-        action
-    );
-    match action {
-        Action::Pass => (),
-        Action::MaybeStepUp | Action::StepUp => {
-            if (action == Action::StepUp || last_step.elapsed() > STEP)
-                && info.mb.limit < info.kbd.limit
-            {
-                *last_step = Instant::now();
-                dev.set_limit_step(true, info.mb.limit).await?;
-            }
-        }
-        Action::MaybeStepDown | Action::StepDown => {
-            if action == Action::StepDown || last_step.elapsed() > STEP {
-                *last_step = Instant::now();
-                dev.set_limit_step(false, info.mb.limit).await?;
-            }
-        }
-        Action::SetDefault => {
-            *last_step = Instant::now();
-            dev.set_limit_default(info.mb.limit).await?
-        }
-        Action::SetMax => {
-            *last_step = Instant::now();
-            dev.set_limit_max(info.mb.limit).await?
-        }
     }
-    Ok(())
+
+    async fn maybe_step<'a, R: Future<Output = Result<()>>, F: FnOnce(&'a mut Ctx) -> R>(
+        &'a mut self,
+        f: F,
+    ) -> Result<()> {
+        const STEP: Duration = Duration::from_secs(10);
+        if self.last_step.elapsed() > STEP {
+            self.last_step = Instant::now();
+            f(self).await?
+        }
+        Ok(())
+    }
+
+    async fn step_up(&mut self, info: &Info) -> Result<()> {
+        if !info.kbd.enabled {
+            self.dev.set_online(true, info.kbd.enabled).await?;
+        } else {
+            self.dev.set_limit_step(true, info.mb.limit).await?;
+        }
+        Ok(())
+    }
+
+    async fn step_down(&mut self, info: &Info) -> Result<()> {
+        if info.mb.limit == self.dev.model.min_limit() {
+            self.last_offline = Instant::now();
+            self.dev.set_online(false, info.kbd.enabled).await?;
+        } else {
+            self.dev.set_limit_step(false, info.mb.limit).await?;
+        }
+        Ok(())
+    }
+
+    async fn step(&mut self) -> Result<()> {
+        const OFFLINE: Duration = Duration::from_secs(20);
+        let info = self.dev.info().await?;
+        let action = self.decide(&info);
+        info!(
+            "ph v: {}, a: {}, s: {:?}, l: {}, c: {}, kb v: {}, a: {}, s: {:?}, l: {}, c: {}, act: {:?}",
+            info.mb.voltage / 1000,
+            info.mb.current / 1000,
+            info.mb.state,
+            info.mb.limit / 1000,
+            info.mb.soc,
+            info.kbd.voltage / 1000,
+            info.kbd.current / 1000,
+            info.kbd.state,
+            info.kbd.limit / 1000,
+            match info.kbd.soc {
+                Some(v) => v.to_string(),
+                None => "n/a".into(),
+            },
+            action
+        );
+        // if the boost is left offline too long we lose communication with it
+        if !info.kbd.enabled && self.last_offline.elapsed() > OFFLINE {
+            self.last_step = Instant::now();
+            self.dev.set_online(true, info.kbd.enabled).await?;
+        }
+        match action {
+            Action::Pass => (),
+            Action::MaybeStepUp => {
+                self.maybe_step(|ctx| async { ctx.step_up(&info).await })
+                    .await?
+            }
+            Action::MaybePhUpKbDown | Action::MaybeKbUpPhDown => {
+                let dir = action == Action::MaybePhUpKbDown;
+                self.maybe_step(|ctx| async {
+                    ctx.dev.set_online(true, info.kbd.enabled).await?;
+                    let lim = ctx.dev.model.limit_step(dir, info.mb.limit);
+                    ctx.dev.set_kb_limit(KBLIM as u32 - lim).await?;
+                    ctx.dev.set_limit_step(dir, info.mb.limit).await?;
+                    Ok(())
+                })
+                .await?
+            }
+            Action::MaybeStepKbUp => {
+                self.maybe_step(|ctx| async {
+                    ctx.dev.set_online(true, info.kbd.enabled).await?;
+                    if info.kbd.limit < KBLIM as u32 {
+                        ctx.dev
+                            .set_kb_limit(min(info.kbd.limit + 100000, KBLIM as u32))
+                            .await?
+                    }
+                    Ok(())
+                })
+                .await?
+            }
+            Action::MaybeStepDown => {
+                self.maybe_step(|ctx| async { ctx.step_down(&info).await })
+                    .await?
+            }
+            Action::SetDefault => {
+                self.last_step = Instant::now();
+                self.dev.set_online(true, info.kbd.enabled).await?;
+                self.dev.set_limit_default(info.mb.limit).await?;
+                self.dev
+                    .set_kb_limit(KBLIM as u32 - self.dev.model.default_limit())
+                    .await?;
+            }
+            Action::SetMax => {
+                self.last_step = Instant::now();
+                self.dev.set_online(true, info.kbd.enabled).await?;
+                self.dev.set_limit_max(info.mb.limit).await?;
+                self.dev
+                    .set_kb_limit(KBLIM as u32 - self.dev.model.default_limit())
+                    .await?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     env_logger::init();
-    let dev = Device::new(Model::detect()?);
-    let mut kb_charging = false;
-    let mut last_step = Instant::now();
+    let mut ctx = Ctx {
+        dev: Device::new(Model::detect()?),
+        kb_charging: false,
+        last_step: Instant::now(),
+        last_offline: Instant::now(),
+    };
     loop {
         time::sleep(Duration::from_secs(1)).await;
-        if let Err(e) = step(&dev, &mut kb_charging, &mut last_step).await {
+        if let Err(e) = ctx.step().await {
             error!("error: {} will retry", e);
         }
     }

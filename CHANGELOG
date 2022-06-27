@@ -1,3 +1,24 @@
+0.1.8:
+  - don't overreact to negative currents when the main battery is full
+    but the kbd battery is not
+
+0.1.7:
+  - new alogorithm to manage charging, deailed in the readme. The main
+    battery should now always charge when the kbd is plugged in.
+
+0.1.6:
+  - shorten the max boster off time to prevent losing control of the keyboard.
+
+0.1.5:
+  - report keyboard case and main battery state of charge
+  - turn off keyboard case charging briefly in the case we are at the
+    minimum limit and we still want to step down
+
+0.1.4:
+  - cap the main battery discharge at 20% while the keyboard has power
+
+0.1.3:
+  - try to keep the cell voltage roughly in sync
 
 0.1.2:
   - port to the OG pinephone

@@ -1,3 +1,7 @@
+# THIS IS DEPRECATED
+
+Megi is integrating this functionality into the kernel, which is where it belongs. As such, this project is now deprecated. Hopefully the kernel functionality will roll out very soon.
+
 # PinePhone (Pro) Keyboard Case Power Manager
 
 As described in Megi's blog, the dual battery nature of the keyboard
@@ -17,6 +21,26 @@ the charging losses (the step up and step down is unavoidable). As
 such this daemon seeks to do exactly that, within the limits of the
 hardware.
 
+It seeks to both avoid charging the internal battery with the keyboard
+battery, and to keep both batteries at roughly the same state of
+charge, by changing the input current limit of the internal battery in
+response to the current load and a set of heristics. The only
+exception to this rule is that it will charge the internal battery if
+it falls below 30%, to prevent the phone from completely discharging
+while the keyboard battery still has capacity (quite critical on the
+PPP, as a complete discharge there can mean spending hours in maskrom
+mode before a bootup is possible).
+
+There are a few benefits to this approach,
+
+- LiPo batteries (and batteries in general) are more efficient at
+  light loads relative to their capacity, so we should get longer
+  runtimes at e.g. C/10 vs at C/2
+- To some extent this is also true for power electronics
+- Since we roughly match the state of charge of the keyboard to the
+  phone, the phone's fuel gauge is a reasonable approximation of the
+  actual state of charge.
+
 ## Current State
 
 Now working on the pinephone and pinephone pro. The pinephone has an
@@ -28,6 +52,17 @@ have to use a heuristic to guess when the battery is discharging. It
 works fine most of the time, but there will be cases where I guess
 wrong. This isn't as bad as it sounds, since the default limit of
 500mA is almost always the correct value for the pinephone.
+
+The powerbank ic in use in the keyboard does not really deal well with
+balacing charging it's own battery and feeding the load. If you leave
+it at the default current limit and increase the phone current limit
+when both batteries are deeply discharged it will draw too much
+current and shutdown/restart in a loop while getting pretty warm. The
+daemon manages the limits when charging in order to prevent this from
+happening. It will always try to keep both batteries charging, but
+will prioritize the main battery so the phone doesn't run out of power
+and turn off. It tries to keep within safe limits, and as a result
+might not charge quite as fast as would be technically possible.
 
 ## Todo
 
@@ -63,7 +98,7 @@ scripts yet. I run it as root in a terminal with logging turned on.
 it will then print log messages every second
 
 ```
-2022-02-18T19:28:12Z INFO  kbpwrd] ph v: 4181, c: -192, s: Discharging, l: 450, kb v: 3912, c: -614, s: Discharging, l: 2300, act: Pass
+2022-04-01T01:34:46Z INFO  kbpwrd] ph v: 3923, a: 469, s: Charging, l: 850, c: 47, kb v: 4071, a: 1527, s: Charging, l: 1500, c: 48, act: Pass
 
 ```
 
@@ -74,8 +109,4 @@ this cycle (e.g. raise, lower, set to default the input current limit
 on the phone).
 
 When running the daemon you should observe your main battery
-discharging, but much more slowly than it normally would. Due to
-better power management and the discrete steps that input current
-limit can accept the keyboard battery will take a larger portion of
-the load than it should during normal loads, and as such it will
-likely discharge first.
+discharging, but much more slowly than it normally would.
