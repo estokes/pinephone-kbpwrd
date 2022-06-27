@@ -97,14 +97,14 @@ impl Device {
         match model {
             Model::PinePhonePro => Device {
                 model,
-                kb_current: base.join("ip5xxx-charger/current_now"),
-                kb_voltage: base.join("ip5xxx-charger/voltage_now"),
-                kb_state: base.join("ip5xxx-charger/status"),
-                kb_limit: base.join("ip5xxx-charger/constant_charge_current"),
+                kb_current: base.join("ip5xxx-battery/current_now"),
+                kb_voltage: base.join("ip5xxx-battery/voltage_now"),
+                kb_state: base.join("ip5xxx-battery/status"),
+                kb_limit: base.join("ip5xxx-battery/constant_charge_current"),
                 kb_enabled: base.join("ip5xxx-boost/online"),
-                mb_state: base.join("battery/status"),
-                mb_voltage: base.join("battery/voltage_now"),
-                mb_current: base.join("battery/current_now"),
+                mb_state: base.join("rk818-battery/status"),
+                mb_voltage: base.join("rk818-battery/voltage_now"),
+                mb_current: base.join("rk818-battery/current_now"),
                 mb_limit: base.join("rk818-usb/input_current_limit"),
             },
             Model::PinePhone => Device {
