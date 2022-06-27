@@ -1,6 +1,17 @@
 # THIS IS DEPRECATED
 
-Megi is integrating this functionality into the kernel, which is where it belongs. As such, this project is now deprecated. Hopefully the kernel functionality will roll out very soon.
+Megi is integrating this functionality into the kernel, which is where
+it belongs. As such, this project is now deprecated. Hopefully the
+kernel functionality will roll out very soon.
+
+UPDATE: 2022-06:
+
+I can't say I know what's going on with this. The sysfs entries kbpwrd
+depends on first disappeared, then megi announced the kernel power
+driver, now they are back with different names and the kernel power
+driver doesn't seem to be doing anything. As such I've updated the
+paths and I am once again running this daemon on my manjaro phosh
+device. 
 
 # PinePhone (Pro) Keyboard Case Power Manager
 
