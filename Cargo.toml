@@ -1,6 +1,6 @@
 [package]
 name = "kbpwrd"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 license = "MIT"
 description = "A daemon for managing the pinephone keyboard case battery"
@@ -20,4 +20,4 @@ serde = "1"
 serde_derive = "1"
 anyhow = "1"
 log = "0.4"
-env_logger = "0.9"
+env_logger = "0.11"
